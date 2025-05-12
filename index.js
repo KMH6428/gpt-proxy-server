@@ -11,6 +11,7 @@ app.use((req, res, next) => {
 
 app.post('/gpt', async (req, res) => {
   const userInput = req.body.user_input;
+  console.log('🟢 수신된 user_input:', userInput);  // 이 줄 추가
 
   if (!userInput) {
     return res.status(400).json({ error: 'Missing user_input' });
