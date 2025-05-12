@@ -38,7 +38,10 @@ app.post('/gpt', async (req, res) => {
     ],
     temperature: 0.5
   };
-
+  
+   // ✅ 여기에서 payload 로그 출력
+  console.log('🔍 GPT 요청 payload:\n', JSON.stringify(payload, null, 2));
+  
   try {
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
