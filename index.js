@@ -32,7 +32,7 @@ app.post('/gpt', async (req, res) => {
       },
       {
         role: 'user',
-        content: userInput
+        content: String(userInput)
       }
     ],
     temperature: 0.5
