@@ -9,50 +9,71 @@ app.use((req, res, next) => {
   next();
 });
 
+// 🔍 PubMed 논문 검색 및 요약 함수
+const getPubmedSnippet = async (query) => {
+  try {
+    const encoded = encodeURIComponent(query);
+
+    // Step 1: PMID 검색
+    const searchRes = await axios.get(
+      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi`,
+      {
+        params: {
+          db: 'pubmed',
+          term: encoded,
+          retmax: 1,
+          retmode: 'json'
+        }
+      }
+    );
+
+    const pmid = searchRes.data.esearchresult?.idlist[0];
+    if (!pmid) return '관련 논문을 찾을 수 없음.';
+
+    // Step 2: 논문 제목 등 요약 요청
+    const summaryRes = await axios.get(
+      `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi`,
+      {
+        params: {
+          db: 'pubmed',
+          id: pmid,
+          retmode: 'json'
+        }
+      }
+    );
+
+    const summary = summaryRes.data.result?.[pmid];
+    const title = summary?.title || '제목 없음';
+    const authors = summary?.authors?.map(a => a.name).join(', ') || '저자 정보 없음';
+
+    return `🔬 <strong>${title}</strong><br>👨‍🔬 저자: ${authors}<br>🔗 <a href="https://pubmed.ncbi.nlm.nih.gov/${pmid}" target="_blank">논문 링크</a>`;
+  } catch (err) {
+    console.error('🔴 PubMed 오류:', err.message);
+    return '논문 정보를 가져오는 데 실패했어.';
+  }
+};
+
 app.post('/gpt', async (req, res) => {
   const userInput = req.body.user_input;
-  console.log('🟢 수신된 user_input:', userInput);  // 이 줄 추가
+  console.log('🟢 수신된 user_input:', userInput);
 
   if (!userInput) {
     return res.status(400).json({ error: 'Missing user_input' });
   }
 
-// ✅ (1) PubMed API 호출 예시 함수
-  const getPubmedSnippet = async (query) => {
-    try {
-      const encoded = encodeURIComponent(query);
-      const response = await axios.get(
-        `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encoded}&retmax=1&retmode=json`
-      );
-
-      const pmid = response.data.esearchresult?.idlist[0];
-      if (!pmid) return '관련 논문을 찾을 수 없음.';
-
-      const detail = await axios.get(
-        `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`
-      );
-
-      const summary = detail.data.result?.[pmid]?.title || '';
-      return `관련 논문 제목: ${summary}\nPMID: ${pmid}\n링크: https://pubmed.ncbi.nlm.nih.gov/${pmid}`;
-    } catch (e) {
-      console.error('🔴 논문 API 오류:', e.message);
-      return '논문 정보를 불러오지 못했어.';
-    }
-  };
-
-  // ✅ (2) 논문 정보 추가
+  // 🔍 PubMed 논문 정보 불러오기
   const paperInfo = await getPubmedSnippet(userInput);
+  console.log('📄 논문 정보:', paperInfo);
 
-  // ✅ (3) GPT 요청 payload 생성
+  // GPT에 전달할 payload 구성
   const payload = {
     model: 'gpt-3.5-turbo',
     messages: [
       {
         role: 'system',
         content:
-          `너는 바이오 제품 추천 도우미야. 사용자에게 실험 목적에 맞는 실험 방법과 실험에 사용되는 제품을 추천해. \
-각 제품의 역할을 설명하고, 가능한 경우 대체 제품도 함께 제시해줘. 모든 응답은 HTML 형식으로 구성해줘. \
-\n\n🔍 아래는 참고할 논문 정보야:\n${paperInfo}`
+          `너는 생명과학 실험 추천 도우미야. 사용자의 실험 목적에 맞는 실험 방법과 실험 재료를 HTML 형식으로 추천해줘. \
+각 재료의 역할과 대체재, 링크를 포함하고, 아래 논문 정보를 참조해.\n\n${paperInfo}`
       },
       {
         role: 'user',
@@ -62,7 +83,7 @@ app.post('/gpt', async (req, res) => {
     temperature: 0.5
   };
 
-  console.log('🔍 GPT 요청 payload:\n', JSON.stringify(payload, null, 2));
+  console.log('📦 GPT payload:', JSON.stringify(payload, null, 2));
   
   try {
     const response = await axios.post(
