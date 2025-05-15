@@ -1,9 +1,13 @@
 const express = require('express');
 const axios = require('axios');
+const bodyParser = require('body-parser');  // ✅ 추가
 const app = express();
-app.use(express.json());
 
-// 🔵 [추가] UTF-8 헤더 강제 설정
+// ✅ 기존 JSON 파서 외에도 URL-encoded form 파서 추가
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// 🔵 UTF-8 헤더 강제 설정
 app.use((req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   next();
@@ -30,7 +34,7 @@ const getPubmedSnippet = async (query) => {
     const pmid = searchRes.data.esearchresult?.idlist[0];
     if (!pmid) return '관련 논문을 찾을 수 없음.';
 
-    // Step 2: 논문 제목 등 요약 요청
+    // Step 2: 논문 요약 요청
     const summaryRes = await axios.get(
       `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi`,
       {
@@ -54,7 +58,7 @@ const getPubmedSnippet = async (query) => {
 };
 
 app.post('/gpt', async (req, res) => {
-  const userInput = req.body.user_input;
+  const userInput = req.body.user_input;  // ✅ 수정 없음
   console.log('🟢 수신된 user_input:', userInput);
 
   if (!userInput) {
@@ -65,7 +69,7 @@ app.post('/gpt', async (req, res) => {
   const paperInfo = await getPubmedSnippet(userInput);
   console.log('📄 논문 정보:', paperInfo);
 
-  // GPT에 전달할 payload 구성
+  // GPT 요청 페이로드
   const payload = {
     model: 'gpt-3.5-turbo',
     messages: [
@@ -97,7 +101,7 @@ app.post('/gpt', async (req, res) => {
       }
     );
 
-    // 🔵 [중요] JSON 문자열로 명시적 전송
+    // 응답 반환
     res.send(JSON.stringify(response.data));
   } catch (error) {
     console.error(error?.response?.data || error.message);
