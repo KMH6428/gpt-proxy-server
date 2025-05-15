@@ -17,19 +17,42 @@ app.post('/gpt', async (req, res) => {
     return res.status(400).json({ error: 'Missing user_input' });
   }
 
+// ✅ (1) PubMed API 호출 예시 함수
+  const getPubmedSnippet = async (query) => {
+    try {
+      const encoded = encodeURIComponent(query);
+      const response = await axios.get(
+        `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encoded}&retmax=1&retmode=json`
+      );
+
+      const pmid = response.data.esearchresult?.idlist[0];
+      if (!pmid) return '관련 논문을 찾을 수 없음.';
+
+      const detail = await axios.get(
+        `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`
+      );
+
+      const summary = detail.data.result?.[pmid]?.title || '';
+      return `관련 논문 제목: ${summary}\nPMID: ${pmid}\n링크: https://pubmed.ncbi.nlm.nih.gov/${pmid}`;
+    } catch (e) {
+      console.error('🔴 논문 API 오류:', e.message);
+      return '논문 정보를 불러오지 못했어.';
+    }
+  };
+
+  // ✅ (2) 논문 정보 추가
+  const paperInfo = await getPubmedSnippet(userInput);
+
+  // ✅ (3) GPT 요청 payload 생성
   const payload = {
     model: 'gpt-3.5-turbo',
     messages: [
       {
         role: 'system',
-        content:  `당신은 생명과학 실험 추천 도우미입니다.
-사용자의 요구에 따라 필요한 실험 방법과 실험 재료를 추천하세요.
-응답 형식은 다음과 같아야 합니다:
-
-1. 실험 절차 (3~5단계로 나누어 설명)
-2. 실험 재료 목록 (한 줄에 하나씩, 줄바꿈 \\n 으로 구분)
-
-사용자의 질문이 모호하더라도 먼저 가능한 실험을 추천한 후, 필요한 정보를 요청하세요.`
+        content:
+          `너는 바이오 제품 추천 도우미야. 사용자에게 실험 목적에 맞는 실험 방법과 실험에 사용되는 제품을 추천해. \
+각 제품의 역할을 설명하고, 가능한 경우 대체 제품도 함께 제시해줘. 모든 응답은 HTML 형식으로 구성해줘. \
+\n\n🔍 아래는 참고할 논문 정보야:\n${paperInfo}`
       },
       {
         role: 'user',
@@ -38,8 +61,7 @@ app.post('/gpt', async (req, res) => {
     ],
     temperature: 0.5
   };
-  
-   // ✅ 여기에서 payload 로그 출력
+
   console.log('🔍 GPT 요청 payload:\n', JSON.stringify(payload, null, 2));
   
   try {
